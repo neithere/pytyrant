@@ -240,6 +240,13 @@ def list_to_dict(lst):
         lst = list(lst)
     return dict((lst[i], lst[i + 1]) for i in xrange(0, len(lst), 2))
 
+def open_tyrant(*args, **kw):
+    "Opens connection and returns an appropriate PyTyrant class."
+    t = Tyrant.open(*args, **kw)
+    if PyTyrant._get_stats(t).get('type', None) == 'table':
+        return PyTableTyrant(t)
+    else:
+        return PyTyrant(t)
 
 class PyTyrant(object, UserDict.DictMixin):
     """
@@ -372,8 +379,11 @@ class PyTyrant(object, UserDict.DictMixin):
         except TyrantError:
             raise KeyError(key)
 
+    @staticmethod
+    def _get_stats(t):
+        return dict(l.split('\t', 1) for l in t.stat().splitlines() if l)
     def get_stats(self):
-        return dict(l.split('\t', 1) for l in self.t.stat().splitlines() if l)
+        return _get_stats(t)
 
     def prefix_keys(self, prefix, maxkeys=None):
         if maxkeys is None:
