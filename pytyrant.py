@@ -23,6 +23,18 @@ for the raw Tyrant protocol::
     foobar
     >>> del t['__test_key__']
 
+    Or even:
+
+    >>> from pytyrant import open_tyrant
+    >>> t = open_tyrant()  # using default settings; you can specify other
+    >>> t.__class__
+    <class 'pytyrant.PyTableTyrant'>
+    >>> t.search.filter(name__in=['John','Mary'])
+    ['john_doe', 'mary_doh']
+
+    (In the latter case the server reported that its database type is TDB, so
+    the extended version of PyTyrant was automatically chosen.)
+
 """
 import itertools
 import math
@@ -240,10 +252,13 @@ def list_to_dict(lst):
         lst = list(lst)
     return dict((lst[i], lst[i + 1]) for i in xrange(0, len(lst), 2))
 
+def get_tyrant_stats(tyrant):
+    return dict(l.split('\t', 1) for l in tyrant.stat().splitlines() if l)
+
 def open_tyrant(*args, **kw):
     "Opens connection and returns an appropriate PyTyrant class."
     t = Tyrant.open(*args, **kw)
-    if PyTyrant._get_stats(t).get('type', None) == 'table':
+    if get_tyrant_stats(t).get('type') == 'table':
         return PyTableTyrant(t)
     else:
         return PyTyrant(t)
@@ -379,11 +394,8 @@ class PyTyrant(object, UserDict.DictMixin):
         except TyrantError:
             raise KeyError(key)
 
-    @staticmethod
-    def _get_stats(t):
-        return dict(l.split('\t', 1) for l in t.stat().splitlines() if l)
     def get_stats(self):
-        return _get_stats(t)
+        return get_tyrant_stats(self.t)
 
     def prefix_keys(self, prefix, maxkeys=None):
         if maxkeys is None:
