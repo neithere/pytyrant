@@ -29,8 +29,6 @@ import socket
 import struct
 import UserDict
 
-__version__ = '1.1.17'
-
 __all__ = [
     'Tyrant', 'TyrantError', 'PyTyrant',
     'RDBMONOULOG', 'RDBXOLCKREC', 'RDBXOLCKGLB',

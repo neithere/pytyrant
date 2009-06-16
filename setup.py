@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
+from pytyrant import __version__
 
-VERSION = '1.1.17'
+VERSION = __version___
 DESCRIPTION = "Pure python client implementation of the Tokyo Tyrant protocol"
 LONG_DESCRIPTION = """
 pytyrant is a pure python client implementation of the binary Tokyo Tyrant
@@ -38,6 +39,6 @@ setup(
     author_email="bob@redivi.com",
     url="http://code.google.com/p/pytyrant/",
     license="MIT License",
-    py_modules=['pytyrant'],
+    packages=['pytyrant'],
     platforms=['any'],
 )
