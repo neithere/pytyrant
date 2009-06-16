@@ -43,12 +43,18 @@ class TyrantError(Exception):
 DEFAULT_PORT = 1978
 MAGIC = 0xc8
 
-
 RDBMONOULOG = 1 << 0
 RDBXOLCKREC = 1 << 0
 RDBXOLCKGLB = 1 << 1
 
 RDBQOSTRASC, RDBQOSTRDESC, RDBQONUMASC, RDBQONUMDESC = range(4)
+
+# Enumeration for index types (from tcrdb.h, tctdb.h)
+RDBITLEXICAL = TDBITLEXICAL = 0    # Lexical string
+RDBITDECIMAL = TDBITDECIMAL = 1    # Decimal string
+RDBITOPT = TDBITOPT = 9998,        # Optimize
+RDBITVOID = TDBITVOID = 9999,      # Void
+RDBITKEEP = TDBITKEEP = 1 << 24    # Keep existing index
 
 
 class C(object):
@@ -536,6 +542,11 @@ class PyTableTyrant(PyTyrant):
     def _search(self):
         return Query(self)
     search = property(_search)
+
+    def setindex(self, column, index_type=RDBITLEXICAL, no_update_log=False):
+        """Create or modify secondary column index."""
+        opts = (no_update_log and RDBMONOULOG or 0)
+        self.t.misc("setindex", opts, (column, str(index_type)))
 
 
 class Tyrant(object):
