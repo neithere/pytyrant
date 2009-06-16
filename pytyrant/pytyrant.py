@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Pure python implementation of the binary Tokyo Tyrant 1.1.17 protocol
 
 Tokyo Cabinet <http://tokyocabinet.sourceforge.net/> is a "super hyper ultra
@@ -21,6 +22,18 @@ for the raw Tyrant protocol::
     >>> print t['__test_key__']
     foobar
     >>> del t['__test_key__']
+
+    Or even:
+
+    >>> from pytyrant import open_tyrant
+    >>> t = open_tyrant()  # using default settings; you can specify other
+    >>> t.__class__
+    <class 'pytyrant.PyTableTyrant'>
+    >>> t.search.filter(name__in=['John','Mary'])
+    ['john_doe', 'mary_doh']
+
+    (In the latter case the server reported that its database type is TDB, so
+    the extended version of PyTyrant was automatically chosen.)
 
 """
 import itertools
@@ -84,25 +97,39 @@ class C(object):
     stat = 0x88
     misc = 0x90
 
-
 QUERY_OPERATIONS = {
-    'streq': '0',     # string is equal to
-    'strinc': '1',    # string is included in
-    'strbw': '2',     # string begins with
-    'strew': '3',     # string ends with
-    'strand': '4',    # string includes all tokens in
-    'stror': '5',     # string includes at least one token in
-    'stroreq': '6',   # string is equal to at least one token in
-    'strrx': '7',     # string matches regular expression of
-    'numeq': '8',     # number is equal to
-    'numgt': '9',     # number is greater than
-    'numge': '10',    # number is greater than or equal to
-    'numlt': '11',    # number is less than
-    'numle': '12',    # number is less than or equal to
-    'numbt': '13',    # number is between two tokens of
-    'numoreq': '14',  # number is equal to at least one token in
+    # operations on strings
+    'str': {
+        None: '0',         # streq - string is equal to
+        'is': '0',         # streq - string is equal to
+        'contains': '1',   # strinc - string is included in
+        'startswith': '2', # strbw - string begins with
+        'endswith': '3',   # strew - string ends with
+        'regex': '7',      # strrx - string matches regular expression of
+        'iregex': '7',     # strrx - string matches regular expression of (case-insensitive)      XXX must prepend value with an asterisk
+    },
+    # operations on numbers
+    'num': {
+        None: '8',         # numeq - number is equal to
+        'is': '8',         # numeq - number is equal to
+        'gt': '9',         # numgt - number is greater than
+        'gte': '10',       # numge - number is greater than or equal to
+        'lt': '11',        # numlt - number is less than
+        'lte': '12',       # numle - number is less than or equal to
+    },
+    # operations on lists of numbers
+    'list_num': {
+        'in': '14',        # numoreq - number is equal to at least one token in
+        'between': '13',   # numbt - number is between two tokens of
+    },
+    # operations on lists of strings (or mixed)
+    'list_str': {
+        None: '4',         # strand - string includes all tokens in
+        'is': '4',         # strand - string includes all tokens in
+        'any': '5',        # stror - string includes at least one token in
+        'in': '6',         # stroreq - string is equal to at least one token in
+    }
 }
-
 
 def _t0(code):
     return [chr(MAGIC) + chr(code)]
@@ -229,6 +256,16 @@ def list_to_dict(lst):
         lst = list(lst)
     return dict((lst[i], lst[i + 1]) for i in xrange(0, len(lst), 2))
 
+def get_tyrant_stats(tyrant):
+    return dict(l.split('\t', 1) for l in tyrant.stat().splitlines() if l)
+
+def open_tyrant(*args, **kw):
+    "Opens connection and returns an appropriate PyTyrant class."
+    t = Tyrant.open(*args, **kw)
+    if get_tyrant_stats(t).get('type') == 'table':
+        return PyTableTyrant(t)
+    else:
+        return PyTyrant(t)
 
 class PyTyrant(object, UserDict.DictMixin):
     """
@@ -362,7 +399,7 @@ class PyTyrant(object, UserDict.DictMixin):
             raise KeyError(key)
 
     def get_stats(self):
-        return dict(l.split('\t', 1) for l in self.t.stat().splitlines() if l)
+        return get_tyrant_stats(self.t)
 
     def prefix_keys(self, prefix, maxkeys=None):
         if maxkeys is None:
@@ -429,22 +466,57 @@ class Query(object):
             return None
         else:
             return resp[0] 
-    
+
+    def _determine_operation(self, lookup, value):
+        """ Returns operation code or raises KeyError.
+        Determines appropriate operation by lookup and value.
+        """
+
+        # number
+        if isinstance(value, (int, float)):
+            return QUERY_OPERATIONS['num'][lookup]
+        # string
+        if isinstance(value, basestring):
+            return QUERY_OPERATIONS['str'][lookup]
+        # list...
+        if hasattr(value, '__iter__'):
+            # ...of numbers
+            if lookup in QUERY_OPERATIONS['list_num']:
+                if len(value) and isinstance(list(value)[0], (int, float)):
+                    return QUERY_OPERATIONS['list_num'][lookup]
+            # ...of strings
+            return QUERY_OPERATIONS['list_str'][lookup]
+        raise KeyError
+
     def filter(self, **query):
         q = self._clone()
         for key, value in query.iteritems():
-            parts = key.split('__')
-            if len(parts) != 2:
-                raise ValueError("Filter arguments should be of the form "
-                    "`field__operation`")
-            field, operation = parts
+            # resolve operation
+            if '__' in key:
+                try:
+                    field, lookup = key.split('__')
+                except ValueError:
+                    raise ValueError("Filter arguments should be of the form "
+                                     "`field__operation`")
+            else:
+                field, lookup = key, None
+
             try:
-                opcode = QUERY_OPERATIONS[operation]
+                opcode = self._determine_operation(lookup, value)
             except KeyError:
-                raise ValueError('%s is not a valid query operation' % (operation,))
+                raise ValueError('"%s" is not a valid lookup for value %s'
+                                 % (lookup, value))
+
+            # prepare value
+            if isinstance(value, (int,float)):
+                # coerce number to string
+                value = str(value)
+            if lookup == 'iregex':
+                # add asterisk for case-insensitive regular expression
+                value = '*%s' % value
             if not isinstance(value, basestring) and hasattr(value, '__iter__'):
                 # Value is a list. Make it a comma separated string.
-                value = ','.join(value)
+                value = ','.join(str(x) for x in value)
             condition = '\x00'.join(["addcond", field, opcode, value])
             q.conditions.append(condition)
         return q
