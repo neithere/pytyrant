@@ -102,13 +102,10 @@ class TTDatabase(object):
             raise AttributeError, msg
 
     def _assert_dbpath(self):
-        try:
-            if self.dbpath.rsplit('.', 1)[1] == self.dbpath_ext:
-                return
-        except IndexError:
-            pass
-        msg = "Database path for %s must end with .%s" % (self.__class__,
-                                                          self.dbpath_ext)
+        if self.dbpath.endswith('.' + self.dbpath_ext):
+            return True
+        msg = "Database path for %s must end with .%s (was '%s')" % (self.__class__,
+                                                          self.dbpath_ext, self.dbpath)
         raise ValueError, msg
 
     def to_cmd(self):
@@ -157,7 +154,7 @@ class TTHashDB(TTDatabase):
 
     dbpath_ext = 'tch'
 
-    def __init__(self, mode=None, bnum=None, apow=None, fpow=None, opts=None,
+    def __init__(self, dbpath, mode=None, bnum=None, apow=None, fpow=None, opts=None,
                  rcnum=None, xmsiz=None, dfunit=None):
         """
         mode : File mode. See TT_FILE_MODES.
@@ -169,7 +166,7 @@ class TTHashDB(TTDatabase):
         xmsiz : Extra mapped memory size (default=67108864 => 64MB)
         dfunit : Auto defrag unit (default=0 => Disabled) 
         """
-        TTDatabase.__init__(self, '+', mode=mode, bnum=bnum, apow=apow,
+        TTDatabase.__init__(self, dbpath, mode=mode, bnum=bnum, apow=apow,
                                fpow=fpow, opts=opts, rcnum=rcnum, xmsiz=xmsiz, dfunit=dfunit)
 
 
