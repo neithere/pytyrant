@@ -333,10 +333,16 @@ class TokyoTyrant(object):
 
     def run(self, wait=False):
         pargs = self.to_cmd()
-        log.debug('Starting process: %s' % ' '.join(pargs))
-        self._proc = subprocess.Popen(pargs, stdout=self.stdout, stderr=self.stderr) 
+        log.debug('Starting subprocess: %s' % ' '.join(pargs))
+        self._proc = subprocess.Popen(pargs, stdout=self.stdout, stderr=self.stderr)
         if wait:
             self.wait()
+
+    def run_exec(self):
+        pargs = self.to_cmd()
+        log.debug('Execing process: %s' % ' '.join(pargs))
+        os.execvp(pargs[0], pargs)
+
 
     def run_wait(self):
         self.run(True)
@@ -344,7 +350,7 @@ class TokyoTyrant(object):
     def wait(self):
         try:
             self._proc.wait()
-        except KeyboardInterrupt:
+        except OSError:
             pass
 
     def poll(self):
